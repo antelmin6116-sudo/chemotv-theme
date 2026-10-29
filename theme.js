@@ -144,6 +144,7 @@
     /* la clave de TMDb NO vive en este archivo (es publico); la inyecta el cargador del APK */
     var BX_TMDB_KEY = (typeof window !== "undefined" && window.BX_TMDB_KEY) || "";
     var TMDB_IMG = "https://image.tmdb.org/t/p/";
+    var BX_VERSION = "v26";   /* se muestra en el chip de "Buscar actualizaciones" del inicio */
 
     function tmdb(path, params, cb) {
         try {
@@ -409,7 +410,14 @@
             "font:700 21px 'Barlow Condensed',sans-serif;letter-spacing:.6px;color:#0c0d11;background:#fff;display:inline-block", scene.a);
         heroHint.appendChild(document.createTextNode("▶  Entrar"));
 
-        scene.__bxHome = { tabs: tabs, navClip: navClip, navStrip: navStrip, drop: drop, grp: grp, collage: collage, art: art, adult: adult, heroTitle: heroTitle, heroDesc: heroDesc, heroHint: heroHint };
+        /* chip "Buscar actualizaciones" (se enfoca con ARRIBA desde la barra) */
+        var upd = el("div", "position:absolute;left:48px;bottom:28px;z-index:5;padding:9px 18px;border-radius:999px;white-space:nowrap;" +
+            "font:700 17px 'Barlow Condensed',sans-serif;letter-spacing:.4px;color:rgba(238,241,246,.7);" +
+            "background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);" +
+            "-webkit-transform-origin:left center;transform-origin:left center;transition:all .18s", scene.a);
+        upd.appendChild(document.createTextNode("⟳  Buscar actualizaciones · chemotv " + BX_VERSION));
+
+        scene.__bxHome = { tabs: tabs, navClip: navClip, navStrip: navStrip, drop: drop, grp: grp, collage: collage, art: art, adult: adult, heroTitle: heroTitle, heroDesc: heroDesc, heroHint: heroHint, upd: upd };
         scene.__bxColCache = {}; scene.__bxColGen = 0; scene.__bxColTimer = null;
         bxHomeUpdate(dc);
         /* al construir, la escena aun esta oculta (offsetLeft=0) y la barra no puede centrarse;
@@ -493,6 +501,26 @@
         col.style.opacity = "1";
     }
 
+    /* chip "Buscar actualizaciones": usa window.bxCheckUpdate del cargador del APK */
+    function bxDoUpdate(scene) {
+        var home = scene.__bxHome; if (!home || !home.upd) return;
+        function setT(t) { try { home.upd.firstChild.data = t; } catch (e) {} }
+        function reset() { setT("⟳  Buscar actualizaciones · chemotv " + BX_VERSION); }
+        if (typeof window.bxCheckUpdate !== "function") { setT("Actualización no disponible aquí"); setTimeout(reset, 2600); return; }
+        setT("Buscando actualizaciones…");
+        window.bxCheckUpdate(function (res) {
+            if (res === "updated") {
+                setT("¡Nueva versión! Aplicando…");
+                try { vsaClient.Toast("chemotv: actualizando interfaz…"); } catch (e) {}
+                setTimeout(function () { try { location.reload(); } catch (e) {} }, 1200);
+            } else if (res === "uptodate") {
+                setT("✓  Ya tienes la última versión"); setTimeout(reset, 3000);
+            } else {
+                setT("Sin conexión — intenta más tarde"); setTimeout(reset, 3000);
+            }
+        });
+    }
+
     function bxHomeUpdate(dc) {
         var scene = dc.ca, home = scene && scene.__bxHome;
         if (!home) return;
@@ -531,6 +559,15 @@
         home.heroDesc.firstChild.data = it.fe || "";
         home.heroHint.style.background = (pt === TYPES.other || pt.c === TYPES.other.c) ? ACCENT : pt.c;
         home.heroHint.style.color = "#0c0d11";
+
+        if (home.upd) {   /* chip de actualizaciones: resaltado cuando esta enfocado (ARRIBA) */
+            var uon = !!scene.__bxUpd, us = home.upd.style;
+            us.color = uon ? "#ffffff" : "rgba(238,241,246,.7)";
+            us.background = uon ? rgba(ACCENT, .22) : "rgba(255,255,255,.06)";
+            us.borderColor = uon ? ACCENT : "rgba(255,255,255,.14)";
+            us.boxShadow = uon ? "0 0 0 2px " + rgba(ACCENT, .55) + ",0 6px 20px " + rgba(ACCENT, .35) : "none";
+            us.transform = us.webkitTransform = uon ? "scale(1.06)" : "none";
+        }
 
         var id = it.m, name = it.hc || "";
         home.adult.style.display = "none";
@@ -648,6 +685,11 @@
             try {
                 var home = this.__bxHome, grp = home && home.grp, dc = this.dc;
                 if (home && grp && dc && !this.na && a && a.source === "key" && a.type === "press") {
+                    /* chip de actualizaciones enfocado: OK lo ejecuta, cualquier otra tecla sale */
+                    if (this.__bxUpd) {
+                        if (a.code === B.key.ra) { bxDoUpdate(this); return; }
+                        this.__bxUpd = false; bxHomeUpdate(dc); return;
+                    }
                     var sel = dc.selectedIndex, ei = grp.idxToEntry[sel], entry = grp.entries[ei], inSub = !!this.__bxInSub;
                     switch (a.code) {
                         case B.key.bb:   /* izquierda: padre anterior */
@@ -669,12 +711,12 @@
                                 }
                             }
                             return;
-                        case B.key.cb:   /* arriba: sube en el submenu / vuelve a la barra */
+                        case B.key.cb:   /* arriba: sube en el submenu, o enfoca el chip de actualizaciones */
                             if (inSub) {
                                 var cp2 = grp.idxToChild[sel];
                                 if (cp2 > 0) dc.K(entry.childIdxs[cp2 - 1]);
                                 else { this.__bxInSub = false; bxHomeUpdate(dc); }
-                            }
+                            } else { this.__bxUpd = true; bxHomeUpdate(dc); }
                             return;
                         case B.key.ra:   /* OK: en padre entra al submenu; en hijo/seccion simple lo abre */
                             if (entry && entry.group && !inSub) { this.__bxInSub = true; bxHomeUpdate(dc); return; }
