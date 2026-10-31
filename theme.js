@@ -144,7 +144,7 @@
     /* la clave de TMDb NO vive en este archivo (es publico); la inyecta el cargador del APK */
     var BX_TMDB_KEY = (typeof window !== "undefined" && window.BX_TMDB_KEY) || "";
     var TMDB_IMG = "https://image.tmdb.org/t/p/";
-    var BX_VERSION = "v27";   /* se muestra en el chip de "Buscar actualizaciones" del inicio */
+    var BX_VERSION = "v28";   /* se muestra en el chip de "Buscar actualizaciones" del inicio */
 
     function tmdb(path, params, cb) {
         try {
@@ -410,7 +410,7 @@
             "font:700 21px 'Barlow Condensed',sans-serif;letter-spacing:.6px;color:#0c0d11;background:#fff;display:inline-block", scene.a);
         heroHint.appendChild(document.createTextNode("▶  Entrar"));
 
-        /* chip "Buscar actualizaciones" (se enfoca con ARRIBA desde la barra) */
+        /* chip "Buscar actualizaciones" (se enfoca con ARRIBA desde la barra, o bajando hasta el fondo de los menús) */
         var upd = el("div", "position:absolute;left:48px;bottom:28px;z-index:5;padding:9px 18px;border-radius:999px;white-space:nowrap;" +
             "font:700 17px 'Barlow Condensed',sans-serif;letter-spacing:.4px;color:rgba(238,241,246,.7);" +
             "background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);" +
@@ -702,14 +702,15 @@
                             if (ei < grp.entries.length - 1) dc.K(grp.entries[ei + 1].childIdxs[0]);
                             else bxHomeUpdate(dc);
                             return;
-                        case B.key.ab:   /* abajo: entra / baja en el submenu */
+                        case B.key.ab:   /* abajo: entra/baja en el submenu; al llegar al fondo, enfoca el chip */
                             if (entry && entry.group) {
                                 if (!inSub) { this.__bxInSub = true; bxHomeUpdate(dc); }
                                 else {
                                     var cp = grp.idxToChild[sel];
                                     if (cp < entry.childIdxs.length - 1) dc.K(entry.childIdxs[cp + 1]);
+                                    else { this.__bxInSub = false; this.__bxUpd = true; bxHomeUpdate(dc); }
                                 }
-                            }
+                            } else { this.__bxUpd = true; bxHomeUpdate(dc); }
                             return;
                         case B.key.cb:   /* arriba: sube en el submenu, o enfoca el chip de actualizaciones */
                             if (inSub) {
