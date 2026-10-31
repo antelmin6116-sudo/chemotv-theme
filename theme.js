@@ -144,7 +144,7 @@
     /* la clave de TMDb NO vive en este archivo (es publico); la inyecta el cargador del APK */
     var BX_TMDB_KEY = (typeof window !== "undefined" && window.BX_TMDB_KEY) || "";
     var TMDB_IMG = "https://image.tmdb.org/t/p/";
-    var BX_VERSION = "v26";   /* se muestra en el chip de "Buscar actualizaciones" del inicio */
+    var BX_VERSION = "v27";   /* se muestra en el chip de "Buscar actualizaciones" del inicio */
 
     function tmdb(path, params, cb) {
         try {
@@ -1817,6 +1817,7 @@
                 if (this.__bxDetail && this.buttons) {
                     /* se reconstruye mas ancho (300) para que no se corte "Continuar reproducción" */
                     var items = this.buttons.buttons.slice();
+                    bxAddLinkItem(this, items);
                     this.buttons.clear();
                     this.buttons = new La(this, 64, 462, DETAIL_BTN_W, K.d.p, items, "left");
                     ib(this.buttons);
@@ -1829,6 +1830,14 @@
                 if (this.__bxDetail && a && a.source === "key" && a.type === "press") {
                     var scene = this, z = scene.__bxZone || 0, code = a.code;
                     var cast = scene.__bxCast || [], rel = scene.__bxRel || [];
+                    /* ventana del enlace abierta: OK o ATRAS la cierran, las demas teclas no hacen nada */
+                    if (scene.__bxLinkBox) {
+                        if (code === B.key.ra || code === B.key.ma || code === B.key.BACK) bxCloseLink(scene);
+                        return;
+                    }
+                    if (z === 0 && code === B.key.ra && scene.buttons && jb(scene.buttons) === "bxlink") {
+                        bxShowLink(scene); return;
+                    }
                     if (z === 0) {
                         /* en los botones: OK sobre "Más de [actor]" abre su busqueda (como antes) */
                         if (code === B.key.ra && scene.buttons && jb(scene.buttons) === "bxactor") {
@@ -1878,6 +1887,114 @@
             scene.buttons = new La(scene, 64, 462, DETAIL_BTN_W, K.d.p, items, "left");
             ib(scene.buttons);
         } catch (e) {}
+    }
+
+    /* ---------- 10b. Enlace de descarga (version de prueba) ----------
+       Pide el enlace igual que el boton "Reproducir" (jd -> $b, mas "policy" si el servidor lo usa),
+       pero en vez de abrir el reproductor lo muestra en texto y en codigo QR. No cambia el item. */
+    function bxAddLinkItem(scene, items) {
+        if (scene.Ci) return;   /* canales en vivo: no aplica */
+        for (var i = 0; i < items.length; i++) if (items[i].name === "bxlink") return;
+        var at = items.length;
+        for (var j = 0; j < items.length; j++) if (items[j].name === "play") { at = j + 1; break; }
+        items.splice(at, 0, { name: "bxlink", text: "Enlace de descarga", visible: true });
+    }
+
+    function bxGetLink(e, cb) {
+        try {
+            if (e.Nc === "vk") { cb(e.o, e.Rb); return; }
+            jd(e.Nc, e.o, {
+                success: function () {
+                    var oldU = U;
+                    U = "";   /* igual que el boton Reproducir */
+                    $b(e, {
+                        success: function (a) {
+                            U = oldU;
+                            var url = a.o;
+                            try { if (vc === true && url) url = (url.indexOf("?") > 0 ? url + "&" : url + "?") + "policy=" + a.Pf; } catch (x) {}
+                            cb(url, a.Rb);
+                        },
+                        f: function () { U = oldU; cb(null); }
+                    });
+                },
+                f: function () { cb(null); }
+            });
+        } catch (x) { cb(null); }
+    }
+
+    /* generador de QR (qrcode-generator 1.4.4, MIT); se baja solo la primera vez que se usa.
+       El QR se dibuja en la TV: el enlace no se manda a ningun servicio externo. */
+    function bxLoadQr(cb) {
+        if (window.qrcode) { cb(window.qrcode); return; }
+        try {
+            var s = document.createElement("script");
+            s.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js";
+            s.onload = function () { cb(window.qrcode || null); };
+            s.onerror = function () { cb(null); };
+            (document.head || document.documentElement).appendChild(s);
+        } catch (e) { cb(null); }
+    }
+
+    function bxCloseLink(scene) {
+        try { if (scene.__bxLinkBox && scene.__bxLinkBox.parentNode) scene.__bxLinkBox.parentNode.removeChild(scene.__bxLinkBox); } catch (e) {}
+        scene.__bxLinkBox = null;
+    }
+
+    function bxShowLink(scene) {
+        var e = scene.e;
+        if (!e) return;
+        var hc = (scene.__bxType && scene.__bxType.c) || ACCENT;
+        var box = el("div", "position:absolute;left:0;top:0;width:100%;height:100%;z-index:60;background:rgba(10,11,15,.92)", scene.a);
+        scene.__bxLinkBox = box;
+        var card = el("div", "position:absolute;left:80px;top:70px;right:80px;bottom:70px;border-radius:18px;" +
+            "background:linear-gradient(150deg,#1d2029,#12141a);box-shadow:0 0 0 2px " + rgba(hc, .5) + ",0 24px 60px rgba(0,0,0,.6)", box);
+        var head = el("div", "position:absolute;left:40px;right:40px;top:28px;font:800 34px 'Barlow Semi Condensed',GothamBlack,sans-serif;color:" + TEXT, card);
+        head.appendChild(document.createTextNode("Enlace de descarga"));
+        var tag = el("span", "display:inline-block;vertical-align:middle;margin-left:14px;padding:2px 12px;border-radius:999px;" +
+            "font:600 15px 'Barlow Condensed',sans-serif;letter-spacing:.8px;background:" + rgba(hc, .24) + ";border:1px solid " + rgba(hc, .5) + ";color:#fff", head);
+        tag.appendChild(document.createTextNode("PRUEBA"));
+        var sub = el("div", "position:absolute;left:40px;right:40px;top:76px;font:600 20px 'Barlow Condensed',sans-serif;color:" + MUTED +
+            ";white-space:nowrap;overflow:hidden", card);
+        sub.appendChild(document.createTextNode(bxCleanTitle(e.R) || e.R || ""));
+
+        var qr = el("div", "position:absolute;left:40px;top:122px;width:300px;height:300px;border-radius:12px;background:#fff;" +
+            "text-align:center;line-height:300px;font:600 18px 'Barlow Condensed',sans-serif;color:#555;overflow:hidden", card);
+        qr.appendChild(document.createTextNode("Cargando…"));
+        var info = el("div", "position:absolute;left:370px;right:40px;top:122px;bottom:70px;overflow:hidden", card);
+        var st = el("div", "font:600 20px 'Barlow Condensed',sans-serif;color:" + TEXT + ";margin-bottom:10px", info);
+        st.appendChild(document.createTextNode("Pidiendo el enlace al servidor…"));
+        var urlBox = el("div", "font:500 17px/23px Consolas,'Courier New',monospace;color:#dfe6ff;word-break:break-all;" +
+            "background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 14px;display:none", info);
+        var foot = el("div", "position:absolute;left:40px;right:40px;bottom:24px;font:500 17px 'Barlow Condensed',sans-serif;color:" + MUTED, card);
+        foot.appendChild(document.createTextNode("Escanea el código con el celular o copia el enlace en Downloader / VLC  ·  OK o ATRÁS para cerrar"));
+
+        function setQrText(t) { qr.innerHTML = ""; qr.appendChild(document.createTextNode(t)); }
+        bxGetLink(e, function (url, fmt) {
+            if (scene.__bxLinkBox !== box) return;
+            if (!url) {
+                st.firstChild.data = "No se pudo obtener el enlace. Prueba de nuevo en un momento.";
+                setQrText("Sin enlace");
+                return;
+            }
+            var kind = /\.m3u8(\?|$)/i.test(url) || /hls|m3u8/i.test(fmt || "") ? "por partes (HLS) · se baja con VLC o 1DM" : "archivo directo";
+            st.firstChild.data = "Formato: " + (fmt || "?") + "  ·  " + kind;
+            urlBox.style.display = "block";
+            urlBox.appendChild(document.createTextNode(url));
+            bxLoadQr(function (lib) {
+                if (scene.__bxLinkBox !== box) return;
+                if (!lib) { setQrText("QR no disponible"); return; }
+                try {
+                    var q = lib(0, "L");
+                    q.addData(url);
+                    q.make();
+                    var n = q.getModuleCount(), cell = Math.max(1, Math.floor(280 / (n + 4)));
+                    qr.innerHTML = "";
+                    qr.style.lineHeight = "0";
+                    var img = el("img", "width:280px;height:280px;margin-top:10px;image-rendering:pixelated", qr);
+                    img.src = q.createDataURL(cell, cell * 2);
+                } catch (x) { setQrText("Enlace muy largo para QR"); }
+            });
+        });
     }
 
     /* desplaza la tira (reparto/relacionadas) para que la celda enfocada quede a la vista */
